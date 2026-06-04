@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build && node dist/test/run-tests.js",
-    "dev": "npm run build && node dist/cli.js"
+    "dev": "npm run build && node dist/cli.js",
+    "start:api": "npm run build && node dist/server.js"
   },
   "keywords": [
     "mermaid",
@@ -20,11 +21,18 @@
   ],
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^24.13.0",
     "typescript": "^5.8.0"
   },
   "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "jszip": "^3.10.1",
+    "multer": "^2.1.1",
     "pptxgenjs": "^4.0.1"
   }
 }
