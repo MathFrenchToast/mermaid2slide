@@ -121,7 +121,7 @@ app.post("/api/convert", upload.single("file"), async (req, res) => {
 });
 
 // Fallback to serve index.html for SPA
-app.get("*", (req, res) => {
+app.use((_req, res) => {
   res.sendFile(resolve(frontendDist, "index.html"));
 });
 
