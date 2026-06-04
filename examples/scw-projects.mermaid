@@ -1,0 +1,109 @@
+flowchart LR
+
+%% =========================
+%% Externe
+%% =========================
+Admins["Administrateurs / DevOps"]
+Users["Utilisateurs applicatifs<br/>Navigateurs HTTPS"]
+Internet["Internet<br/>registries, OS updates,<br/>APIs externes"]
+
+%% =========================
+%% Projet 1
+%% =========================
+subgraph P1["Projet 1 - Services / Administration"]
+  direction TB
+
+  subgraph R1["Région Scaleway"]
+    direction TB
+
+    subgraph VPC_ADMIN["VPC Admin / Services<br/>Couche 3 - route table / vRouter"]
+      direction TB
+
+      RT_ADMIN["Route table VPC Admin"]
+
+      subgraph PN_ADMIN["Private Network Admin<br/>Couche 2 - CIDR Admin"]
+        direction TB
+
+        VM_HUB["Instance VM Hub / Bastion<br/>IP privée<br/>outils admin, kubectl, proxy"]
+        PGW_ADMIN["Public Gateway Admin<br/>attachée au Private Network<br/>egress éventuel / accès admin éventuel"]
+      end
+
+      VPN_ADMIN["Accès VPN vers VPC Admin<br/>ex: Site-to-Site VPN<br/>ou VM VPN selon choix"]
+    end
+  end
+end
+
+%% =========================
+%% Peering
+%% =========================
+PEERING["VPC Peering<br/>2 peering connectors<br/>+ custom routes<br/>CIDR non chevauchants<br/>même région"]
+
+%% =========================
+%% Projet 2
+%% =========================
+subgraph P2["Projet 2 - Applications Kapsule"]
+  direction TB
+
+  subgraph R2["Région Scaleway"]
+    direction TB
+
+    subgraph VPC_APP["VPC Applicatif<br/>Couche 3 - route table / vRouter"]
+      direction TB
+
+      RT_APP["Route table VPC Applicatif"]
+
+      subgraph PN_APP["Private Network Applicatif / Kapsule<br/>Couche 2 - CIDR Applicatif"]
+        direction TB
+
+        PGW_APP["Public Gateway Applicative<br/>attachée au Private Network<br/>Dynamic NAT + default route<br/>egress nodes<br/>SSH bastion pour accès control plane si full isolation"]
+
+        LB_PUBLIC["Load Balancer Public<br/>frontend public HTTPS<br/>backend privé via Private Network"]
+
+        KCP["Kapsule Control Plane API<br/>accès full isolation via tunnel<br/>Public Gateway SSH bastion<br/>à confirmer selon état réel du cluster"]
+
+        subgraph KAPSULE["Cluster Kapsule<br/>pool full isolation"]
+          direction TB
+
+          NODE_SYS["Node system / ingress controller<br/>IP privée uniquement"]
+          NODE_APP1["Node applicatif<br/>IP privée uniquement"]
+          NODE_APP2["Node applicatif<br/>IP privée uniquement"]
+          SG_KAPSULE["Security Group Kapsule<br/>règles d'entrée/sortie"]
+
+          NODE_SYS --> NODE_APP1
+          NODE_SYS --> NODE_APP2
+          SG_KAPSULE -. protège .- NODE_SYS
+          SG_KAPSULE -. protège .- NODE_APP1
+          SG_KAPSULE -. protège .- NODE_APP2
+        end
+      end
+    end
+  end
+end
+
+%% =========================
+%% Flux admin
+%% =========================
+Admins -->|"VPN / accès admin"| VPN_ADMIN
+VPN_ADMIN --> VM_HUB
+VM_HUB -->|"trafic privé inter-VPC<br/>si routes + règles OK"| PEERING
+PEERING --> RT_APP
+RT_ADMIN --> PEERING
+RT_APP --> PN_APP
+
+%% Accès control plane documenté
+VM_HUB -. "kubectl via tunnel SSH<br/>vers bastion PGW App<br/>chemin documenté Scaleway" .-> PGW_APP
+PGW_APP -. "tunnel vers API :6443" .-> KCP
+
+%% =========================
+%% Flux applicatif
+%% =========================
+Users -->|"HTTPS public"| LB_PUBLIC
+LB_PUBLIC -->|"backend privé<br/>Private Network"| NODE_SYS
+
+%% =========================
+%% Egress
+%% =========================
+KAPSULE -->|"egress Internet<br/>default route + NAT"| PGW_APP
+PGW_APP --> Internet
+
+PGW_ADMIN -. "egress admin éventuel" .-> Internet

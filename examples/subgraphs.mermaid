@@ -1,0 +1,14 @@
+flowchart TB
+  subgraph Front["Frontend"]
+    Browser["Browser"]
+    Gateway["Gateway"]
+  end
+
+  subgraph Back["Backend"]
+    Api["API"]
+    Db["Database"]
+  end
+
+  Browser --> Gateway
+  Gateway --> Api
+  Api -. cache miss .- Db

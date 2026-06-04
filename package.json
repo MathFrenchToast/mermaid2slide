@@ -1,0 +1,30 @@
+{
+  "name": "mermaid-editable-export",
+  "version": "0.1.0",
+  "description": "Semantic Mermaid to editable presentation objects converter",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && node dist/test/run-tests.js",
+    "dev": "npm run build && node dist/cli.js"
+  },
+  "keywords": [
+    "mermaid",
+    "pptx",
+    "odp",
+    "odf",
+    "ooxml",
+    "diagram"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "pptxgenjs": "^4.0.1"
+  }
+}
