@@ -51,3 +51,32 @@ Export PPTX:
 ```bash
 npm run dev -- C:\\DEV\\scw-projects.mermaid pptx
 ```
+
+## Interface Web (Vue.js + Express)
+
+Une interface web est disponible pour utiliser le convertisseur depuis un navigateur, avec une protection anti-bot via Cloudflare Turnstile.
+
+### Lancement en local
+
+1. **Installer les dépendances du frontend** :
+   ```bash
+   cd frontend
+   npm install
+   cd ..
+   ```
+
+2. **Compiler le Frontend et le Backend** :
+   ```bash
+   npm run build --prefix frontend
+   npm run build
+   ```
+
+3. **Démarrer le serveur web** :
+   ```bash
+   npm run start:api
+   ```
+
+L'application sera accessible sur **http://localhost:3000**.
+
+*Note : Pour le déploiement en production, n'oubliez pas de configurer la variable d'environnement `TURNSTILE_SECRET_KEY` dans un fichier `.env` à la racine, et de mettre à jour `SITE_KEY` dans `frontend/src/App.vue`.*
+
