@@ -32,6 +32,11 @@ export type ShapeKind =
   | "polyline"
   | "text"
   | "container"
+  | "hexagon"
+  | "double-circle"
+  | "parallelogram"
+  | "parallelogram-reversed"
+  | "subprocess"
   | "unknown";
 
 export interface SourceRef {
@@ -59,7 +64,7 @@ export interface DiagramObjectBase {
   semanticType: SemanticType;
   styleRef?: string;
   sourceRef?: SourceRef;
-  metadata?: Record<string, string | number | boolean>;
+  metadata?: Record<string, string | number | boolean | string[] | undefined>;
 }
 
 export interface Label extends DiagramObjectBase {

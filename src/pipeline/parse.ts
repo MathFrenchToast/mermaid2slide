@@ -35,6 +35,10 @@ export interface ParsedFlowchartNode {
   shape: ShapeKind;
   parentGroupId?: string;
   order: number;
+  mermaidShape?: string;
+  iconKey?: string;
+  classes?: string[];
+  rawShapeSyntax?: string;
 }
 
 export interface ParsedFlowchartEdge {
@@ -74,10 +78,14 @@ type NodeToken = {
   id: string;
   text?: string;
   shape: ShapeKind;
+  mermaidShape?: string;
+  iconKey?: string;
+  classes?: string[];
+  rawShapeSyntax?: string;
 };
 
 const nodeTokenPattern =
-  /([A-Za-z][A-Za-z0-9_]*)(\[(?:"(?:[^"\\]|\\.)*"|[^\]]*)\]|\((?:"(?:[^"\\]|\\.)*"|[^)]*)\)|\{(?:"(?:[^"\\]|\\.)*"|[^}]*)\})?/g;
+  /([A-Za-z][A-Za-z0-9_]*)((?:@\{(?:"(?:[^"\\]|\\.)*"|[^}])*\}|\(\(\((?:"(?:[^"\\]|\\.)*"|[^)])*\)\)\)|\[\((?:"(?:[^"\\]|\\.)*"|[^)])*\)\]|\(\((?:"(?:[^"\\]|\\.)*"|[^)])*\)\)|\[\[(?:"(?:[^"\\]|\\.)*"|[^\]]*)\]\]|\[\/(?:"(?:[^"\\]|\\.)*"|[^\/]*)\/\]|\[\\(?:"(?:[^"\\]|\\.)*"|[^\\]*)\\\]|\{\{(?:"(?:[^"\\]|\\.)*"|[^}]*)\}\}|\[(?:"(?:[^"\\]|\\.)*"|[^\]]*)\]|\((?:"(?:[^"\\]|\\.)*"|[^)]*)\)|\{(?:"(?:[^"\\]|\\.)*"|[^}]*)\}))?/g;
 
 function normalizeText(text: string): string {
   return text
@@ -102,6 +110,22 @@ function unquote(text: string): string {
   return trimmed;
 }
 
+function parseMetadataBlock(content: string): { shape?: string; label?: string; icon?: string } {
+  const result: { shape?: string; label?: string; icon?: string } = {};
+  const inner = content.slice(2, -1).trim();
+  const pairRegex = /\b(shape|label|icon)\s*:\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|([^,]+))/g;
+
+  let match;
+  while ((match = pairRegex.exec(inner)) !== null) {
+    const key = match[1];
+    const val = match[2] ?? match[3] ?? match[4];
+    if (val !== undefined) {
+      result[key as "shape" | "label" | "icon"] = val.trim();
+    }
+  }
+  return result;
+}
+
 function parseNodeToken(rawId: string, rawShape?: string): NodeToken {
   if (!rawShape) {
     return {
@@ -111,22 +135,78 @@ function parseNodeToken(rawId: string, rawShape?: string): NodeToken {
     };
   }
 
-  const startsWith = rawShape[0];
-  const endsWith = rawShape[rawShape.length - 1];
-  const innerText = normalizeText(unquote(rawShape.slice(1, -1)));
-
   let shape: ShapeKind = "rectangle";
+  let innerText = "";
+  let mermaidShape: string | undefined;
+  let iconKey: string | undefined;
+  const rawShapeSyntax = rawShape;
 
-  if (startsWith === "(" && endsWith === ")") {
+  if (rawShape.startsWith("@{") && rawShape.endsWith("}")) {
+    const meta = parseMetadataBlock(rawShape);
+    if (meta.shape) {
+      mermaidShape = meta.shape;
+      const lowered = meta.shape.toLowerCase();
+      if (lowered === "rect" || lowered === "process") {
+        shape = "rectangle";
+      } else if (lowered === "cloud") {
+        shape = "rounded-rectangle";
+      } else if (["db", "database", "cylinder", "datastore", "data-store", "disk", "lin-cyl", "h-cyl", "storage"].includes(lowered)) {
+        shape = "cylinder";
+      } else if (["decision", "diamond", "diam"].includes(lowered)) {
+        shape = "diamond";
+      } else if (lowered === "circle") {
+        shape = "circle";
+      } else if (lowered === "subprocess" || lowered === "procs") {
+        shape = "subprocess";
+      } else {
+        shape = "rectangle";
+      }
+    }
+    if (meta.icon) {
+      iconKey = meta.icon;
+    }
+    if (meta.label) {
+      innerText = normalizeText(meta.label);
+    }
+  } else if (rawShape.startsWith("(((") && rawShape.endsWith(")))")) {
+    shape = "double-circle";
+    innerText = normalizeText(unquote(rawShape.slice(3, -3)));
+  } else if (rawShape.startsWith("[(") && rawShape.endsWith(")]")) {
+    shape = "cylinder";
+    innerText = normalizeText(unquote(rawShape.slice(2, -2)));
+  } else if (rawShape.startsWith("((") && rawShape.endsWith("))")) {
+    shape = "circle";
+    innerText = normalizeText(unquote(rawShape.slice(2, -2)));
+  } else if (rawShape.startsWith("[[") && rawShape.endsWith("]]")) {
+    shape = "subprocess";
+    innerText = normalizeText(unquote(rawShape.slice(2, -2)));
+  } else if (rawShape.startsWith("[/") && rawShape.endsWith("/]")) {
+    shape = "parallelogram";
+    innerText = normalizeText(unquote(rawShape.slice(2, -2)));
+  } else if (rawShape.startsWith("[\\") && rawShape.endsWith("\\]")) {
+    shape = "parallelogram-reversed";
+    innerText = normalizeText(unquote(rawShape.slice(2, -2)));
+  } else if (rawShape.startsWith("{{") && rawShape.endsWith("}}")) {
+    shape = "hexagon";
+    innerText = normalizeText(unquote(rawShape.slice(2, -2)));
+  } else if (rawShape.startsWith("[") && rawShape.endsWith("]")) {
+    shape = "rectangle";
+    innerText = normalizeText(unquote(rawShape.slice(1, -1)));
+  } else if (rawShape.startsWith("(") && rawShape.endsWith(")")) {
     shape = "rounded-rectangle";
-  } else if (startsWith === "{" && endsWith === "}") {
+    innerText = normalizeText(unquote(rawShape.slice(1, -1)));
+  } else if (rawShape.startsWith("{") && rawShape.endsWith("}")) {
     shape = "diamond";
+    innerText = normalizeText(unquote(rawShape.slice(1, -1)));
   }
 
   return {
     id: rawId,
     text: innerText || rawId,
-    shape
+    shape,
+    mermaidShape,
+    iconKey,
+    rawShapeSyntax
   };
 }
 
@@ -167,6 +247,9 @@ function ensureNode(
       existing.parentGroupId = parentGroupId;
       registerChild(flowchart, parentGroupId, existing.id);
     }
+    if (token.mermaidShape) existing.mermaidShape = token.mermaidShape;
+    if (token.iconKey) existing.iconKey = token.iconKey;
+    if (token.rawShapeSyntax) existing.rawShapeSyntax = token.rawShapeSyntax;
     return existing;
   }
 
@@ -175,7 +258,10 @@ function ensureNode(
     text: token.text ?? token.id,
     shape: token.shape,
     parentGroupId,
-    order
+    order,
+    mermaidShape: token.mermaidShape,
+    iconKey: token.iconKey,
+    rawShapeSyntax: token.rawShapeSyntax
   };
 
   flowchart.nodes.set(token.id, created);
@@ -237,20 +323,42 @@ function maskProtectedSegments(line: string): string {
       return `-.${" ".repeat(innerLength)}.-`;
     }
   );
+  masked = masked.replaceAll(
+    /:::([A-Za-z0-9_-]+(?:,[A-Za-z0-9_-]+)*)/g,
+    (match) => `:::${" ".repeat(Math.max(0, match.length - 3))}`
+  );
 
   return masked;
 }
 
-function extractNodeTokens(line: string): Array<NodeToken & { index: number; raw: string }> {
+function extractNodeTokens(
+  line: string,
+  nodeClassesMap?: Map<string, Set<string>>
+): Array<NodeToken & { index: number; raw: string }> {
   const matches: Array<NodeToken & { index: number; raw: string }> = [];
   const maskedLine = maskProtectedSegments(line);
 
   for (const match of maskedLine.matchAll(nodeTokenPattern)) {
-    const raw = line.slice(match.index ?? 0, (match.index ?? 0) + match[0].length);
+    let raw = line.slice(match.index ?? 0, (match.index ?? 0) + match[0].length);
     const rawMatch = /^([A-Za-z][A-Za-z0-9_]*)(.*)$/.exec(raw);
     const id = rawMatch?.[1] ?? match[1];
     const shapeToken = rawMatch?.[2] ? rawMatch[2] : match[2];
     const parsed = parseNodeToken(id, shapeToken);
+
+    const classMatch = /^:::([A-Za-z0-9_-]+(?:,[A-Za-z0-9_-]+)*)/.exec(
+      line.slice((match.index ?? 0) + match[0].length)
+    );
+    if (classMatch && nodeClassesMap) {
+      const classes = classMatch[1].split(",").map(c => c.trim());
+      if (!nodeClassesMap.has(id)) {
+        nodeClassesMap.set(id, new Set());
+      }
+      for (const cls of classes) {
+        nodeClassesMap.get(id)!.add(cls);
+      }
+      raw += classMatch[0];
+    }
+
     matches.push({
       ...parsed,
       index: match.index ?? 0,
@@ -289,12 +397,34 @@ export function parseFlowchart(sourceText: string): ParsedFlowchart {
     rootChildren: []
   };
   const groupStack: string[] = [];
+  const nodeClassesMap = new Map<string, Set<string>>();
   let order = 0;
   let edgeId = 1;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line || line.startsWith("%%")) {
+      continue;
+    }
+
+    if (line.startsWith("classDef ")) {
+      continue;
+    }
+
+    if (line.startsWith("class ") && !line.startsWith("classDef ")) {
+      const parts = line.slice("class ".length).trim().replace(/;$/, "").split(/\s+/);
+      if (parts.length >= 2) {
+        const ids = parts[0].split(",").map(id => id.trim());
+        const classes = parts[1].split(",").map(c => c.trim());
+        for (const id of ids) {
+          if (!nodeClassesMap.has(id)) {
+            nodeClassesMap.set(id, new Set());
+          }
+          for (const cls of classes) {
+            nodeClassesMap.get(id)!.add(cls);
+          }
+        }
+      }
       continue;
     }
 
@@ -348,7 +478,7 @@ export function parseFlowchart(sourceText: string): ParsedFlowchart {
       continue;
     }
 
-    const tokens = extractNodeTokens(line);
+    const tokens = extractNodeTokens(line, nodeClassesMap);
     if (tokens.length === 0) {
       continue;
     }
@@ -379,6 +509,14 @@ export function parseFlowchart(sourceText: string): ParsedFlowchart {
         style: parseEdgeStyle(segment),
         order: order++
       });
+    }
+  }
+
+  // Assign classes to all nodes
+  for (const node of flowchart.nodes.values()) {
+    const classesSet = nodeClassesMap.get(node.id);
+    if (classesSet && classesSet.size > 0) {
+      node.classes = Array.from(classesSet);
     }
   }
 

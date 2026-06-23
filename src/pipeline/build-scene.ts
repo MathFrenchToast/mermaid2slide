@@ -59,39 +59,93 @@ function isHorizontal(direction: LayoutDirection): boolean {
   return direction === "LR" || direction === "RL";
 }
 
-function inferNodeSemanticType(node: ParsedFlowchartNode): NodeSemanticType {
+function inferNodeSemantics(node: ParsedFlowchartNode): {
+  semanticType: NodeSemanticType;
+  iconKey?: string;
+} {
+  let iconKey: string | undefined = node.iconKey;
+
+  // Priority 1: metadata.mermaidShape
+  if (node.mermaidShape) {
+    const lowered = node.mermaidShape.toLowerCase();
+    if (["db", "database", "cylinder", "datastore", "data-store"].includes(lowered)) {
+      return { semanticType: "database", iconKey: iconKey ?? "database" };
+    }
+    if (["disk", "lin-cyl", "h-cyl", "storage"].includes(lowered)) {
+      return { semanticType: "database", iconKey: iconKey ?? "disk" };
+    }
+    if (lowered === "cloud") {
+      return { semanticType: "network", iconKey: iconKey ?? "cloud" };
+    }
+    if (["server", "process", "rect", "procs", "subprocess"].includes(lowered)) {
+      return { semanticType: "system", iconKey: iconKey ?? "server" };
+    }
+    if (["decision", "diamond", "diam"].includes(lowered)) {
+      return { semanticType: "decision", iconKey };
+    }
+  }
+
+  // Priority 2: classic parsed shape
+  if (node.shape === "cylinder") {
+    return { semanticType: "database", iconKey: iconKey ?? "database" };
+  }
+  if (node.shape === "diamond") {
+    return { semanticType: "decision", iconKey };
+  }
+
+  // Priority 3: classes Mermaid
+  if (node.classes && node.classes.length > 0) {
+    for (const cls of node.classes) {
+      const clsLower = cls.toLowerCase();
+      if (["db", "database", "cylinder", "datastore", "data-store"].includes(clsLower)) {
+        return { semanticType: "database", iconKey: iconKey ?? "database" };
+      }
+      if (["disk", "lin-cyl", "h-cyl", "storage"].includes(clsLower)) {
+        return { semanticType: "database", iconKey: iconKey ?? "disk" };
+      }
+      if (clsLower === "cloud") {
+        return { semanticType: "network", iconKey: iconKey ?? "cloud" };
+      }
+      if (["server", "process", "rect", "procs", "subprocess"].includes(clsLower)) {
+        return { semanticType: "system", iconKey: iconKey ?? "server" };
+      }
+      if (["decision", "diamond", "diam"].includes(clsLower)) {
+        return { semanticType: "decision", iconKey };
+      }
+      if (clsLower === "security" || clsLower === "firewall" || clsLower === "shield") {
+        return { semanticType: "network", iconKey: iconKey ?? "shield" };
+      }
+      if (clsLower === "cluster") {
+        return { semanticType: "cluster", iconKey };
+      }
+    }
+  }
+
+  // Priority 4: existing heuristics on id and text
   const identity = `${node.id} ${node.text}`.toLowerCase();
   const hasInfrastructureHint =
     /\b(vpc|vpn|gateway|load balancer|lb_|lb\b|route table|router|vrouter|peering|network|security group|sg_|cluster|node|control plane|api|vm|bastion|proxy|service|system)\b/.test(
       identity
     );
 
-  if (node.shape === "diamond") {
-    return "decision";
-  }
-
-  if (node.shape === "cylinder") {
-    return "database";
-  }
-
   if (
     /\b(internet|external|externes|api externes|registry|registries)\b/.test(
       identity
     )
   ) {
-    return "external";
+    return { semanticType: "external", iconKey: iconKey ?? (identity.includes("internet") ? "cloud" : undefined) };
   }
 
   if (
     /\b(vpc|vpn|gateway|load balancer|lb_|lb\b|route table|router|vrouter|peering|network|security group|sg_)\b/.test(identity)
   ) {
-    return "network";
+    return { semanticType: "network", iconKey: iconKey ?? (identity.includes("load balancer") || identity.includes("lb") ? "server" : undefined) };
   }
 
   if (
     /\b(db|database|postgres|mysql|redis|mongodb|storage|bucket)\b/.test(identity)
   ) {
-    return "database";
+    return { semanticType: "database", iconKey: iconKey ?? "database" };
   }
 
   if (
@@ -99,7 +153,8 @@ function inferNodeSemanticType(node: ParsedFlowchartNode): NodeSemanticType {
       identity
     )
   ) {
-    return "system";
+    const semanticType = identity.includes("cluster") ? "cluster" : "system";
+    return { semanticType, iconKey: iconKey ?? "server" };
   }
 
   if (
@@ -108,10 +163,18 @@ function inferNodeSemanticType(node: ParsedFlowchartNode): NodeSemanticType {
       identity
     )
   ) {
-    return "actor";
+    return { semanticType: "actor", iconKey };
   }
 
-  return "process";
+  if (/\b(shield|firewall)\b/.test(identity)) {
+    return { semanticType: "network", iconKey: iconKey ?? "shield" };
+  }
+
+  return { semanticType: "process", iconKey };
+}
+
+function inferNodeSemanticType(node: ParsedFlowchartNode): NodeSemanticType {
+  return inferNodeSemantics(node).semanticType;
 }
 
 function inferNodeStyle(semanticType: NodeSemanticType): string {
@@ -276,7 +339,10 @@ function applyMeasuredNode(
   y: number,
   state: LayoutState
 ): Rect {
-  const semanticType = inferNodeSemanticType(measuredNode.node);
+  const semantics = inferNodeSemantics(measuredNode.node);
+  const semanticType = semantics.semanticType;
+  const iconKey = measuredNode.node.iconKey ?? semantics.iconKey;
+
   const bounds = createRect(x, y, measuredNode.width, measuredNode.height);
 
   state.nodes.push({
@@ -289,7 +355,11 @@ function applyMeasuredNode(
     styleRef: inferNodeStyle(semanticType),
     metadata: {
       sourceId: measuredNode.node.id,
-      parentGroupId: measuredNode.node.parentGroupId ?? ""
+      parentGroupId: measuredNode.node.parentGroupId ?? "",
+      mermaidShape: measuredNode.node.mermaidShape,
+      iconKey,
+      classes: measuredNode.node.classes,
+      rawShapeSyntax: measuredNode.node.rawShapeSyntax
     }
   });
 

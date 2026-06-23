@@ -1,0 +1,41 @@
+flowchart TB
+  Internet@{ shape: cloud, label: "Public Internet" }
+  Firewall@{ icon: "shield", label: "Firewall Node" }:::security
+
+  subgraph K8s["Kubernetes Cluster"]
+    direction TB
+    subgraph AppNodes["App Node Pool"]
+      direction LR
+      App1@{ shape: process, label: "Web App 1" }
+      App2@{ shape: process, label: "Web App 2" }
+    end
+
+    subgraph SystemNodes["System Node Pool"]
+      Ingress@{ shape: process, label: "Ingress Controller" }
+      Monitor@{ shape: process, label: "Prometheus Monitoring" }
+    end
+  end
+
+  subgraph DbCluster["Database Cluster"]
+    direction LR
+    DbPrimary@{ shape: db, label: "Primary Database" }
+    DbReplica@{ shape: db, label: "Replica Database" }
+  end
+
+  subgraph Storage["Persistent Storage"]
+    Vol1@{ shape: disk, label: "Block Volume 1" }
+    Vol2@{ shape: disk, label: "Block Volume 2" }
+  end
+
+  classDef security fill:#fdd,stroke:#f66;
+  class Firewall security
+
+  Internet --> Firewall
+  Firewall --> Ingress
+  Ingress --> App1
+  Ingress --> App2
+  App1 --> DbPrimary
+  App2 --> DbPrimary
+  DbPrimary --> DbReplica
+  DbPrimary --> Vol1
+  DbReplica --> Vol2

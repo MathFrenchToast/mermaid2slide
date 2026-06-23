@@ -143,6 +143,122 @@ A --> B
       assert.ok(rewritten.includes("<a:t>Start</a:t>"));
       assert.ok(!rewritten.includes('name="Text 1"'));
     }
+  },
+  {
+    name: "parses flowchart nodes with classic cylinder shape syntax",
+    run: () => {
+      const parsed = parseMermaidDocument("flowchart TD\nA[(Database)]");
+      assert.ok(parsed.flowchart);
+      assert.equal(parsed.flowchart.nodes.length, 1);
+      assert.equal(parsed.flowchart.nodes[0]?.id, "A");
+      assert.equal(parsed.flowchart.nodes[0]?.shape, "cylinder");
+      assert.equal(parsed.flowchart.nodes[0]?.text, "Database");
+    }
+  },
+  {
+    name: "parses flowchart nodes with new metadata block shapes and icons",
+    run: () => {
+      const parsed = parseMermaidDocument(`flowchart TD
+A@{ shape: db, label: "PostgreSQL" }
+B@{ shape: cloud, label: "Internet" }
+C@{ icon: "shield", label: "Firewall" }
+`);
+      assert.ok(parsed.flowchart);
+      assert.equal(parsed.flowchart.nodes.length, 3);
+      
+      const a = parsed.flowchart.nodes[0]!;
+      assert.equal(a.id, "A");
+      assert.equal(a.shape, "cylinder");
+      assert.equal(a.text, "PostgreSQL");
+      assert.equal(a.mermaidShape, "db");
+
+      const b = parsed.flowchart.nodes[1]!;
+      assert.equal(b.id, "B");
+      assert.equal(b.shape, "rounded-rectangle");
+      assert.equal(b.text, "Internet");
+      assert.equal(b.mermaidShape, "cloud");
+
+      const c = parsed.flowchart.nodes[2]!;
+      assert.equal(c.id, "C");
+      assert.equal(c.shape, "rectangle");
+      assert.equal(c.text, "Firewall");
+      assert.equal(c.iconKey, "shield");
+    }
+  },
+  {
+    name: "parses inline classes and standalone class statements",
+    run: () => {
+      const parsed = parseMermaidDocument(`flowchart TD
+A:::database
+B
+class B critical,critical-style
+`);
+      assert.ok(parsed.flowchart);
+      assert.equal(parsed.flowchart.nodes.length, 2);
+      
+      const a = parsed.flowchart.nodes.find(n => n.id === "A")!;
+      assert.deepEqual(a.classes, ["database"]);
+
+      const b = parsed.flowchart.nodes.find(n => n.id === "B")!;
+      assert.deepEqual(b.classes, ["critical", "critical-style"]);
+    }
+  },
+  {
+    name: "parses edge declarations combined with new metadata shape blocks",
+    run: () => {
+      const parsed = parseMermaidDocument(`flowchart TD
+A@{ shape: cloud, label: "CloudFlare" } --> B@{ shape: db, label: "Postgres" }
+`);
+      assert.ok(parsed.flowchart);
+      assert.equal(parsed.flowchart.nodes.length, 2);
+      assert.equal(parsed.flowchart.edges.length, 1);
+      
+      const a = parsed.flowchart.nodes[0]!;
+      assert.equal(a.id, "A");
+      assert.equal(a.mermaidShape, "cloud");
+      assert.equal(a.text, "CloudFlare");
+
+      const b = parsed.flowchart.nodes[1]!;
+      assert.equal(b.id, "B");
+      assert.equal(b.mermaidShape, "db");
+      assert.equal(b.text, "Postgres");
+
+      assert.equal(parsed.flowchart.edges[0]?.from, "A");
+      assert.equal(parsed.flowchart.edges[0]?.to, "B");
+    }
+  },
+  {
+    name: "builds semantic scenes with rich node metadata and semantic types",
+    run: () => {
+      const parsed = parseMermaidDocument(`flowchart TD
+A@{ shape: db, label: "PostgreSQL" }
+B@{ shape: cloud, label: "Internet" }
+C@{ icon: "shield", label: "Firewall" }
+D:::database
+`);
+      const scene = buildScene(parsed);
+      assert.equal(scene.slides.length, 1);
+      const nodes = scene.slides[0]!.nodes;
+      
+      const a = nodes.find(n => n.id === "A")!;
+      assert.equal(a.semanticType, "database");
+      assert.equal(a.shape, "cylinder");
+      assert.equal(a.metadata?.mermaidShape, "db");
+      assert.equal(a.metadata?.iconKey, "database");
+
+      const b = nodes.find(n => n.id === "B")!;
+      assert.equal(b.semanticType, "network");
+      assert.equal(b.metadata?.mermaidShape, "cloud");
+      assert.equal(b.metadata?.iconKey, "cloud");
+
+      const c = nodes.find(n => n.id === "C")!;
+      assert.equal(c.semanticType, "network");
+      assert.equal(c.metadata?.iconKey, "shield");
+
+      const d = nodes.find(n => n.id === "D")!;
+      assert.equal(d.semanticType, "database");
+      assert.deepEqual(d.metadata?.classes, ["database"]);
+    }
   }
 ];
 

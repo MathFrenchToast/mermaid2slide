@@ -130,17 +130,94 @@ function addGroup(slide: any, group: SemanticSlide["groups"][number]): void {
   }
 }
 
+function resolvePptxShapeType(node: Node): string {
+  switch (node.shape) {
+    case "diamond":
+      return "diamond";
+    case "rounded-rectangle":
+      return "roundRect";
+    case "circle":
+    case "double-circle":
+      return "ellipse";
+    case "cylinder":
+      return "flowChartMagneticDisk";
+    case "hexagon":
+      return "hexagon";
+    case "parallelogram":
+    case "parallelogram-reversed":
+      return "parallelogram";
+    case "subprocess":
+      return "rect";
+    default:
+      break;
+  }
+
+  const rawShape = (node.metadata?.mermaidShape as string | undefined)?.toLowerCase();
+  if (rawShape) {
+    if (rawShape === "cloud") {
+      return "cloud";
+    }
+    if (["db", "database", "cylinder", "datastore", "data-store"].includes(rawShape)) {
+      return "flowChartMagneticDisk";
+    }
+    if (["disk", "lin-cyl", "h-cyl", "storage"].includes(rawShape)) {
+      return "flowChartMagneticDisk";
+    }
+    if (["decision", "diamond", "diam"].includes(rawShape)) {
+      return "diamond";
+    }
+    if (["rect", "process", "procs", "subprocess"].includes(rawShape)) {
+      return "rect";
+    }
+    if (rawShape === "circle" || rawShape === "double-circle") {
+      return "ellipse";
+    }
+    if (rawShape === "hexagon") {
+      return "hexagon";
+    }
+    if (rawShape === "parallelogram" || rawShape === "parallelogram-reversed") {
+      return "parallelogram";
+    }
+  }
+
+  const classes = node.metadata?.classes as string[] | undefined;
+  if (classes && classes.length > 0) {
+    for (const cls of classes) {
+      const clsLower = cls.toLowerCase();
+      if (["db", "database", "cylinder", "datastore", "data-store", "disk", "lin-cyl", "h-cyl", "storage"].includes(clsLower)) {
+        return "flowChartMagneticDisk";
+      }
+      if (clsLower === "cloud") {
+        return "cloud";
+      }
+      if (["decision", "diamond", "diam"].includes(clsLower)) {
+        return "diamond";
+      }
+      if (clsLower === "circle") {
+        return "ellipse";
+      }
+    }
+  }
+
+  if (node.semanticType === "database") {
+    return "flowChartMagneticDisk";
+  }
+  if (node.semanticType === "decision") {
+    return "diamond";
+  }
+  if (node.semanticType === "actor") {
+    return "round2SameRect";
+  }
+
+  return "rect";
+}
+
+function resolveNodeIconKey(node: Node): string | undefined {
+  return node.metadata?.iconKey as string | undefined;
+}
+
 function addNode(slide: any, node: Node): void {
-  const shapeType =
-    node.shape === "diamond"
-      ? "diamond"
-      : node.shape === "rounded-rectangle"
-        ? "roundRect"
-        : node.shape === "cylinder"
-          ? "flowChartMagneticDisk"
-          : node.semanticType === "actor"
-            ? "round2SameRect"
-          : "rect";
+  const shapeType = resolvePptxShapeType(node);
 
   slide.addShape(shapeType, {
     objectName: `node:${node.id}`,
@@ -155,11 +232,40 @@ function addNode(slide: any, node: Node): void {
     fill: {
       color: resolveFillColor(node.styleRef)
     },
-    radius: node.shape === "rounded-rectangle" ? 0.08 : undefined
+    radius: (shapeType === "roundRect" || node.shape === "rounded-rectangle") ? 0.08 : undefined
   });
 
-  if (node.text) {
-    slide.addText(escapeText(node.text), {
+  const iconKey = resolveNodeIconKey(node);
+  let text = node.text;
+  if (iconKey && text) {
+    let emoji = "";
+    switch (iconKey.toLowerCase()) {
+      case "database":
+        emoji = "🗄️ ";
+        break;
+      case "disk":
+        emoji = "💾 ";
+        break;
+      case "cloud":
+        emoji = "☁️ ";
+        break;
+      case "server":
+        emoji = "🖥️ ";
+        break;
+      case "shield":
+      case "firewall":
+        emoji = "🛡️ ";
+        break;
+      default:
+        break;
+    }
+    if (emoji && !text.includes(emoji)) {
+      text = emoji + text;
+    }
+  }
+
+  if (text) {
+    slide.addText(escapeText(text), {
       objectName: `nodeText:${node.id}`,
       x: pxToInches(node.bounds.x + 8),
       y: pxToInches(node.bounds.y + 6),
